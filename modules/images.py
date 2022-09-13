@@ -274,6 +274,7 @@ def apply_filename_pattern(x, p, seed, prompt):
 
     x = x.replace("[model_hash]", shared.sd_model_hash)
     x = x.replace("[date]", datetime.date.today().isoformat())
+    x = x.replace("[datetime]", re.sub(r'(\.\d+|\D+)', "", datetime.datetime.now().isoformat()))
 
     return x
 
@@ -290,7 +291,7 @@ def save_image(image, path, basename, seed=None, prompt=None, extension='png', i
         file_decoration = opts.samples_filename_pattern or "[seed]-[prompt_spaces]"
 
     if file_decoration != "":
-        file_decoration = "-" + file_decoration.lower()
+        file_decoration = file_decoration.lower() + "-"
 
     file_decoration = apply_filename_pattern(file_decoration, p, seed, prompt)
 
@@ -318,8 +319,8 @@ def save_image(image, path, basename, seed=None, prompt=None, extension='png', i
     fullfn_without_extension = "a"
     for i in range(500):
         fn = f"{filecount+i:05}" if basename == '' else f"{basename}-{filecount+i:04}"
-        fullfn = os.path.join(path, f"{fn}{file_decoration}.{extension}")
-        fullfn_without_extension = os.path.join(path, f"{fn}{file_decoration}")
+        fullfn = os.path.join(path, f"{file_decoration}{fn}.{extension}")
+        fullfn_without_extension = os.path.join(path, f"{file_decoration}{fn}")
         if not os.path.exists(fullfn):
             break
 
