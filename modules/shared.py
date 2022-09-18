@@ -89,8 +89,7 @@ interrogator = modules.interrogate.InterrogateModels("interrogate")
 
 face_restorers = []
 
-modules.sd_models.list_models()
-
+modules.sd_models.list_models(cmd_opts.ckpt_dir, cmd_opts.ckpt)
 
 class Options:
     class OptionInfo:

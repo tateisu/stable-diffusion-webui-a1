@@ -23,10 +23,10 @@ except Exception:
     pass
 
 
-def list_models():
+def list_models(ckpt_dir,cmd_ckpt):
     checkpoints_list.clear()
 
-    model_dir = os.path.abspath(shared.cmd_opts.ckpt_dir)
+    model_dir = os.path.abspath(ckpt_dir)
 
     def modeltitle(path, h):
         abspath = os.path.abspath(path)
@@ -41,7 +41,6 @@ def list_models():
 
         return f'{name} [{h}]'
 
-    cmd_ckpt = shared.cmd_opts.ckpt
     if os.path.exists(cmd_ckpt):
         h = model_hash(cmd_ckpt)
         title = modeltitle(cmd_ckpt, h)
