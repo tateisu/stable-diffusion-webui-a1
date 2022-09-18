@@ -313,7 +313,7 @@ def save_image(image, path, basename, seed=None, prompt=None, extension='png', i
         file_decoration = opts.samples_filename_pattern or "[seed]-[prompt_spaces]"
 
     if file_decoration != "":
-        file_decoration = file_decoration.lower() + "-"
+        file_decoration = file_decoration.lower()
 
     file_decoration = apply_filename_pattern(file_decoration, p, seed, prompt)
 
@@ -338,11 +338,17 @@ def save_image(image, path, basename, seed=None, prompt=None, extension='png', i
 
     fullfn = "a.png"
     fullfn_without_extension = "a"
-    basecount = 0 # get_next_sequence_number(path, basename)
+    basecount = 1 # get_next_sequence_number(path, basename)
     for i in range(500):
-        fn = f"{basecount+i}" if basename == '' else f"{basename}-{basecount+i}"
-        fullfn = os.path.join(path, f"{file_decoration}{fn}.{extension}")
-        fullfn_without_extension = os.path.join(path, f"{file_decoration}{fn}")
+        fnList=[]
+        if file_decoration != "":
+            fnList.append(file_decoration)
+        if basename != "":
+            fnList.append(basename)
+        if not fnList or basecount != 1:
+            fnList.append(basecount)
+        fullfn_without_extension = os.path.join(path, "-".join(fnList))
+        fullfn = f"{fullfn_without_extension}.{extension}"
         if not os.path.exists(fullfn):
             break
 
