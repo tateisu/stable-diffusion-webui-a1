@@ -336,11 +336,11 @@ def save_image(image, path, basename, seed=None, prompt=None, extension='png', i
 
     os.makedirs(path, exist_ok=True)
 
-    basecount = get_next_sequence_number(path, basename)
     fullfn = "a.png"
     fullfn_without_extension = "a"
+    basecount = 0 # get_next_sequence_number(path, basename)
     for i in range(500):
-        fn = f"{basecount+i:05}" if basename == '' else f"{basename}-{basecount+i:04}"
+        fn = f"{basecount+i}" if basename == '' else f"{basename}-{basecount+i}"
         fullfn = os.path.join(path, f"{file_decoration}{fn}.{extension}")
         fullfn_without_extension = os.path.join(path, f"{file_decoration}{fn}")
         if not os.path.exists(fullfn):
