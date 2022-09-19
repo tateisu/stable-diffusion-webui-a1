@@ -11,6 +11,8 @@ titles = {
 	"Batch size": "How many image to create in a single batch",
     "CFG Scale": "Classifier Free Guidance Scale - how strongly the image should conform to prompt - lower values produce more creative results",
     "Seed": "A value that determines the output of random number generator - if you create an image with same parameters and seed as another image, you'll get the same result",
+    "\u{1f3b2}\ufe0f": "Set seed to -1, which will cause a new random number to be used every time",
+    "\u267b\ufe0f": "Reuse seed from last generation, mostly useful if it was randomed",
 
     "Inpaint a part of image": "Draw a mask over an image, and the script will regenerate the masked area with content according to prompt",
     "SD upscale": "Upscale image normally, split result into tiles, improve each tile using img2img, merge whole image back",
@@ -68,15 +70,30 @@ titles = {
     "Create style": "Save current prompts as a style. If you add the token {prompt} to the text, the style use that as placeholder for your prompt when you use the style in the future.",
 
     "Checkpoint name": "Loads weights from checkpoint before making images. You can either use hash or a part of filename (as seen in settings) for checkpoint name. Recommended to use with Y axis for less switching.",
+
+    "vram": "Torch active: Peak amount of VRAM used by Torch during generation, excluding cached data.\nTorch reserved: Peak amount of VRAM allocated by Torch, including all active and cached data.\nSys VRAM: Peak amount of VRAM allocation across all applications / total GPU VRAM (peak utilization%).",
+
+    "Highres. fix": "Use a two step process to partially create an image at smaller resolution, upscale, and then improve details in it without changing composition",
+    "Scale latent": "Uscale the image in latent space. Alternative is to produce the full image from latent representation, upscale that, and then move it back to latent space.",
+
 }
 
 
 onUiUpdate(function(){
-	gradioApp().querySelectorAll('span, button, select').forEach(function(span){
+	gradioApp().querySelectorAll('span, button, select, p').forEach(function(span){
 		tooltip = titles[span.textContent];
 
 		if(!tooltip){
 		    tooltip = titles[span.value];
+		}
+
+		if(!tooltip){
+			for (const c of span.classList) {
+				if (c in titles) {
+					tooltip = titles[c];
+					break;
+				}
+			}
 		}
 
 		if(tooltip){

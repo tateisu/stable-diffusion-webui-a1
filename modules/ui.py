@@ -53,6 +53,12 @@ css_hide_progressbar = """
 .meta-text { display:none!important; }
 """
 
+# Using constants for these since the variation selector isn't visible.
+# Important that they exactly match script.js for tooltip to work.
+random_symbol = '\U0001f3b2\ufe0f'  # 🎲️
+reuse_symbol = '\u267b\ufe0f'  # ♻️
+
+
 def plaintext_to_html(text):
     text = "<p>" + "<br>\n".join([f"{html.escape(x)}" for x in text.split('\n')]) + "</p>"
     return text
@@ -119,7 +125,9 @@ def save_files(js_data, images, index):
 
 def wrap_gradio_call(func):
     def f(*args, **kwargs):
-        shared.mem_mon.monitor()
+        run_memmon = opts.memmon_poll_rate > 0 and not shared.mem_mon.disabled
+        if run_memmon:
+            shared.mem_mon.monitor()
         t = time.perf_counter()
 
         try:
@@ -136,17 +144,17 @@ def wrap_gradio_call(func):
 
         elapsed = time.perf_counter() - t
 
-        mem_stats = {k: -(v//-(1024*1024)) for k,v in shared.mem_mon.stop().items()}
-        active_peak = mem_stats['active_peak']
-        reserved_peak = mem_stats['reserved_peak']
-        sys_peak = '?' if opts.memmon_poll_rate <= 0 else mem_stats['system_peak']
-        sys_total = mem_stats['total']
-        sys_pct = '?' if opts.memmon_poll_rate <= 0 else round(sys_peak/sys_total * 100, 2)
-        vram_tooltip = "Torch active: Peak amount of VRAM used by Torch during generation, excluding cached data.&#013;" \
-                       "Torch reserved: Peak amount of VRAM allocated by Torch, including all active and cached data.&#013;" \
-                       "Sys VRAM: Peak amount of VRAM allocation across all applications / total GPU VRAM (peak utilization%)."
+        if run_memmon:
+            mem_stats = {k: -(v//-(1024*1024)) for k, v in shared.mem_mon.stop().items()}
+            active_peak = mem_stats['active_peak']
+            reserved_peak = mem_stats['reserved_peak']
+            sys_peak = mem_stats['system_peak']
+            sys_total = mem_stats['total']
+            sys_pct = round(sys_peak/max(sys_total, 1) * 100, 2)
 
-        vram_html = '' if opts.memmon_poll_rate == 0 else f"<p class='vram' title='{vram_tooltip}'>Torch active/reserved: {active_peak}/{reserved_peak} MiB, <wbr>Sys VRAM: {sys_peak}/{sys_total} MiB ({sys_pct}%)</p>"
+            vram_html = f"<p class='vram'>Torch active/reserved: {active_peak}/{reserved_peak} MiB, <wbr>Sys VRAM: {sys_peak}/{sys_total} MiB ({sys_pct}%)</p>"
+        else:
+            vram_html = ''
 
         # last item is always HTML
         res[-1] += f"<div class='performance'><p class='time'>Time taken: <wbr>{elapsed:.2f}s</p>{vram_html}</div>"
@@ -197,6 +205,8 @@ def check_progress_call():
 
 def check_progress_call_initial():
     shared.state.job_count = -1
+    shared.state.current_latent = None
+    shared.state.current_image = None
 
     return check_progress_call()
 
@@ -214,40 +224,6 @@ def visit(x, func, path=""):
             visit(c, func, path)
     elif x.label is not None:
         func(path + "/" + str(x.label), x)
-
-
-def create_seed_inputs():
-    with gr.Row():
-        seed = gr.Number(label='Seed', value=-1)
-        subseed = gr.Number(label='Variation seed', value=-1, visible=False)
-        seed_checkbox = gr.Checkbox(label="Extra", elem_id="subseed_show", value=False)
-
-    with gr.Row():
-        subseed_strength = gr.Slider(label='Variation strength', value=0.0, minimum=0, maximum=1, step=0.01, visible=False)
-        seed_resize_from_w = gr.Slider(minimum=0, maximum=2048, step=64, label="Resize seed from width", value=0, visible=False)
-        seed_resize_from_h = gr.Slider(minimum=0, maximum=2048, step=64, label="Resize seed from height", value=0, visible=False)
-
-    def change_visiblity(show):
-
-        return {
-            subseed: gr_show(show),
-            subseed_strength: gr_show(show),
-            seed_resize_from_h: gr_show(show),
-            seed_resize_from_w: gr_show(show),
-        }
-
-    seed_checkbox.change(
-        change_visiblity,
-        inputs=[seed_checkbox],
-        outputs=[
-            subseed,
-            subseed_strength,
-            seed_resize_from_h,
-            seed_resize_from_w
-        ]
-    )
-
-    return seed, subseed, subseed_strength, seed_resize_from_h, seed_resize_from_w
 
 
 def add_style(name: str, prompt: str, negative_prompt: str):
@@ -275,6 +251,81 @@ def interrogate(image):
     prompt = shared.interrogator.interrogate(image)
 
     return gr_show(True) if prompt is None else prompt
+
+
+def create_seed_inputs():
+    with gr.Row():
+        with gr.Box():
+            with gr.Row(elem_id='seed_row'):
+                seed = gr.Number(label='Seed', value=-1)
+                seed.style(container=False)
+                random_seed = gr.Button(random_symbol, elem_id='random_seed')
+                reuse_seed = gr.Button(reuse_symbol, elem_id='reuse_seed')
+
+        with gr.Box(elem_id='subseed_show_box'):
+            seed_checkbox = gr.Checkbox(label='Extra', elem_id='subseed_show', value=False)
+
+    # Components to show/hide based on the 'Extra' checkbox
+    seed_extras = []
+
+    with gr.Row(visible=False) as seed_extra_row_1:
+        seed_extras.append(seed_extra_row_1)
+        with gr.Box():
+            with gr.Row(elem_id='subseed_row'):
+                subseed = gr.Number(label='Variation seed', value=-1)
+                subseed.style(container=False)
+                random_subseed = gr.Button(random_symbol, elem_id='random_subseed')
+                reuse_subseed = gr.Button(reuse_symbol, elem_id='reuse_subseed')
+        subseed_strength = gr.Slider(label='Variation strength', value=0.0, minimum=0, maximum=1, step=0.01)
+
+    with gr.Row(visible=False) as seed_extra_row_2:
+        seed_extras.append(seed_extra_row_2)
+        seed_resize_from_w = gr.Slider(minimum=0, maximum=2048, step=64, label="Resize seed from width", value=0)
+        seed_resize_from_h = gr.Slider(minimum=0, maximum=2048, step=64, label="Resize seed from height", value=0)
+
+    random_seed.click(fn=lambda: -1, show_progress=False, inputs=[], outputs=[seed])
+    random_subseed.click(fn=lambda: -1, show_progress=False, inputs=[], outputs=[subseed])
+
+    def change_visibility(show):
+        return {comp: gr_show(show) for comp in seed_extras}
+
+    seed_checkbox.change(change_visibility, show_progress=False, inputs=[seed_checkbox], outputs=seed_extras)
+
+    return seed, reuse_seed, subseed, reuse_subseed, subseed_strength, seed_resize_from_h, seed_resize_from_w
+
+
+def connect_reuse_seed(seed: gr.Number, reuse_seed: gr.Button, generation_info: gr.Textbox, dummy_component, is_subseed):
+    """ Connects a 'reuse (sub)seed' button's click event so that it copies last used
+        (sub)seed value from generation info the to the seed field. If copying subseed and subseed strength
+        was 0, i.e. no variation seed was used, it copies the normal seed value instead."""
+    def copy_seed(gen_info_string: str, index):
+        res = -1
+
+        try:
+            gen_info = json.loads(gen_info_string)
+            index -= gen_info.get('index_of_first_image', 0)
+
+            if is_subseed and gen_info.get('subseed_strength', 0) > 0:
+                all_subseeds = gen_info.get('all_subseeds', [-1])
+                res = all_subseeds[index if 0 <= index < len(all_subseeds) else 0]
+            else:
+                all_seeds = gen_info.get('all_seeds', [-1])
+                res = all_seeds[index if 0 <= index < len(all_seeds) else 0]
+
+        except json.decoder.JSONDecodeError as e:
+            if gen_info_string != '':
+                print("Error parsing JSON generation info:", file=sys.stderr)
+                print(gen_info_string, file=sys.stderr)
+
+        return [res, gr_show(False)]
+
+    reuse_seed.click(
+        fn=copy_seed,
+        _js="(x, y) => [x, selected_gallery_index()]",
+        show_progress=False,
+        inputs=[generation_info, dummy_component],
+        outputs=[seed, dummy_component]
+    )
 
 
 def create_toprow(is_img2img):
@@ -332,6 +383,7 @@ def setup_progressbar(progressbar, preview):
 def create_ui(txt2img, img2img, run_extras, run_pnginfo):
     with gr.Blocks(analytics_enabled=False) as txt2img_interface:
         txt2img_prompt, roll, txt2img_prompt_style, txt2img_negative_prompt, txt2img_prompt_style2, submit, _, txt2img_prompt_style_apply, txt2img_save_style = create_toprow(is_img2img=False)
+        dummy_component = gr.Label(visible=False)
 
         with gr.Row().style(equal_height=False):
             with gr.Column(variant='panel'):
@@ -341,6 +393,11 @@ def create_ui(txt2img, img2img, run_extras, run_pnginfo):
                 with gr.Row():
                     restore_faces = gr.Checkbox(label='Restore faces', value=False, visible=len(shared.face_restorers) > 1)
                     tiling = gr.Checkbox(label='Tiling', value=False)
+                    enable_hr = gr.Checkbox(label='Highres. fix', value=False)
+
+                with gr.Row(visible=False) as hr_options:
+                    scale_latent = gr.Checkbox(label='Scale latent', value=True)
+                    denoising_strength = gr.Slider(minimum=0.0, maximum=1.0, step=0.01, label='Denoising strength', value=0.7)
 
                 with gr.Row():
                     batch_count = gr.Number(label='Batch count', value=1, precision=0)
@@ -352,7 +409,7 @@ def create_ui(txt2img, img2img, run_extras, run_pnginfo):
                     width = gr.Slider(minimum=64, maximum=2048, step=64, label="Width", value=512)
                     height = gr.Slider(minimum=64, maximum=2048, step=64, label="Height", value=512)
 
-                seed, subseed, subseed_strength, seed_resize_from_h, seed_resize_from_w = create_seed_inputs()
+                seed, reuse_seed, subseed, reuse_subseed, subseed_strength, seed_resize_from_h, seed_resize_from_w = create_seed_inputs()
 
                 with gr.Group():
                     custom_inputs = modules.scripts.scripts_txt2img.setup_ui(is_img2img=False)
@@ -378,6 +435,9 @@ def create_ui(txt2img, img2img, run_extras, run_pnginfo):
                     html_info = gr.HTML()
                     generation_info = gr.Textbox(visible=False)
 
+            connect_reuse_seed(seed, reuse_seed, generation_info, dummy_component, is_subseed=False)
+            connect_reuse_seed(subseed, reuse_subseed, generation_info, dummy_component, is_subseed=True)
+
             txt2img_args = dict(
                 fn=txt2img,
                 _js="submit",
@@ -397,6 +457,9 @@ def create_ui(txt2img, img2img, run_extras, run_pnginfo):
                     subseed, subseed_strength, seed_resize_from_h, seed_resize_from_w,
                     height,
                     width,
+                    enable_hr,
+                    scale_latent,
+                    denoising_strength,
                 ] + custom_inputs,
                 outputs=[
                     txt2img_gallery,
@@ -409,6 +472,12 @@ def create_ui(txt2img, img2img, run_extras, run_pnginfo):
             txt2img_prompt.submit(**txt2img_args)
             submit.click(**txt2img_args)
 
+            enable_hr.change(
+                fn=lambda x: gr_show(x),
+                inputs=[enable_hr],
+                outputs=[hr_options],
+            )
+
             interrupt.click(
                 fn=lambda: shared.state.interrupt(),
                 inputs=[],
@@ -417,11 +486,11 @@ def create_ui(txt2img, img2img, run_extras, run_pnginfo):
 
             save.click(
                 fn=wrap_gradio_call(save_files),
-                _js = "(x, y, z) => [x, y, selected_gallery_index()]",
+                _js="(x, y, z) => [x, y, selected_gallery_index()]",
                 inputs=[
                     generation_info,
                     txt2img_gallery,
-                    html_info
+                    html_info,
                 ],
                 outputs=[
                     html_info,
@@ -485,7 +554,7 @@ def create_ui(txt2img, img2img, run_extras, run_pnginfo):
                     width = gr.Slider(minimum=64, maximum=2048, step=64, label="Width", value=512)
                     height = gr.Slider(minimum=64, maximum=2048, step=64, label="Height", value=512)
 
-                seed, subseed, subseed_strength, seed_resize_from_h, seed_resize_from_w = create_seed_inputs()
+                seed, reuse_seed, subseed, reuse_subseed, subseed_strength, seed_resize_from_h, seed_resize_from_w = create_seed_inputs()
 
                 with gr.Group():
                     custom_inputs = modules.scripts.scripts_img2img.setup_ui(is_img2img=True)
@@ -511,6 +580,9 @@ def create_ui(txt2img, img2img, run_extras, run_pnginfo):
                 with gr.Group():
                     html_info = gr.HTML()
                     generation_info = gr.Textbox(visible=False)
+
+            connect_reuse_seed(seed, reuse_seed, generation_info, dummy_component, is_subseed=False)
+            connect_reuse_seed(subseed, reuse_subseed, generation_info, dummy_component, is_subseed=True)
 
             def apply_mode(mode, uploadmask):
                 is_classic = mode == 0
@@ -649,7 +721,6 @@ def create_ui(txt2img, img2img, run_extras, run_pnginfo):
             prompts = [(txt2img_prompt, txt2img_negative_prompt), (img2img_prompt, img2img_negative_prompt)]
             style_dropdowns = [(txt2img_prompt_style, txt2img_prompt_style2), (img2img_prompt_style, img2img_prompt_style2)]
 
-            dummy_component = gr.Label(visible=False)
             for button, (prompt, negative_prompt) in zip([txt2img_save_style, img2img_save_style], prompts):
                 button.click(
                     fn=add_style,
@@ -784,7 +855,7 @@ def create_ui(txt2img, img2img, run_extras, run_pnginfo):
         return 'Settings applied.'
 
     with gr.Blocks(analytics_enabled=False) as settings_interface:
-        submit = gr.Button(value="Apply settings", variant='primary')
+        settings_submit = gr.Button(value="Apply settings", variant='primary')
         result = gr.HTML()
 
         with gr.Row(elem_id="settings").style(equal_height=False):
@@ -796,7 +867,7 @@ def create_ui(txt2img, img2img, run_extras, run_pnginfo):
                         if index < len(keys):
                             components.append(create_setting_component(keys[index]))
 
-        submit.click(
+        settings_submit.click(
             fn=run_settings,
             inputs=components,
             outputs=[result]
@@ -822,10 +893,19 @@ def create_ui(txt2img, img2img, run_extras, run_pnginfo):
         css += css_hide_progressbar
 
     with gr.Blocks(css=css, analytics_enabled=False, title="Stable Diffusion") as demo:
+
         with gr.Tabs() as tabs:
             for interface, label, ifid in interfaces:
                 with gr.TabItem(label, id=ifid):
                     interface.render()
+
+        text_settings = gr.Textbox(elem_id="settings_json", value=lambda: opts.dumpjson(), visible=False)
+
+        settings_submit.click(
+            fn=lambda: opts.dumpjson(),
+            inputs=[],
+            outputs=[text_settings],
+        )
 
         tabs.change(
             fn=lambda x: x,

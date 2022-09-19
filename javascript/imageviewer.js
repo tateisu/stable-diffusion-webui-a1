@@ -53,6 +53,9 @@ function modalKeyHandler(event){
         case "ArrowRight":
             modalNextImage(event)
             break;
+        case "Escape":
+            closeModal();
+            break;
     }
 }
 
@@ -67,14 +70,29 @@ function showGalleryImage(){
                     e.style.cursor='pointer'
 
                     e.addEventListener('click', function (evt) {
-                      showModal(evt)
-
+                        if(!opts.js_modal_lightbox) return;
+                        modalZoomSet(gradioApp().getElementById('modalImage'), opts.js_modal_lightbox_initialy_zoomed)
+                        showModal(evt)
                     },true);
                 }
             });
         }
 
     }, 100);
+}
+
+function modalZoomSet(modalImage, enable){
+    if( enable ){
+        modalImage.classList.add('modalImageFullscreen');
+    } else{
+        modalImage.classList.remove('modalImageFullscreen');
+    }
+}
+
+function modalZoomToggle(event){
+    modalImage = gradioApp().getElementById("modalImage");
+    modalZoomSet(modalImage, !modalImage.classList.contains('modalImageFullscreen'))
+    event.stopPropagation()
 }
 
 function galleryImageHandler(e){
@@ -84,25 +102,31 @@ function galleryImageHandler(e){
 }
 
 onUiUpdate(function(){
-	fullImg_preview = gradioApp().querySelectorAll('img.w-full')
-	    if(fullImg_preview != null){
-		fullImg_preview.forEach(galleryImageHandler);
-	}
+    fullImg_preview = gradioApp().querySelectorAll('img.w-full')
+        if(fullImg_preview != null){
+	    fullImg_preview.forEach(galleryImageHandler);
+    }
 })
 
 document.addEventListener("DOMContentLoaded", function() {
     const modalFragment = document.createDocumentFragment();
     const modal = document.createElement('div')
     modal.onclick = closeModal;
-    
+    modal.id = "lightboxModal";
+    modal.tabIndex=0
+    modal.addEventListener('keydown', modalKeyHandler, true)
+
     const modalClose = document.createElement('span')
     modalClose.className = 'modalClose cursor';
     modalClose.innerHTML = '&times;'
     modalClose.onclick = closeModal;
-    modal.id = "lightboxModal";
-    modal.tabIndex=0
-    modal.addEventListener('keydown', modalKeyHandler, true)
     modal.appendChild(modalClose)
+
+    const modalZoom = document.createElement('span')
+    modalZoom.className = 'modalZoom cursor';
+    modalZoom.innerHTML = '&#10529;'
+    modalZoom.addEventListener('click', modalZoomToggle, true)
+    modal.appendChild(modalZoom)
 
     const modalImage = document.createElement('img')
     modalImage.id = 'modalImage';

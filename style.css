@@ -43,9 +43,31 @@
     margin-right: auto;
 }
 
+#random_seed, #random_subseed, #reuse_seed, #reuse_subseed{
+    min-width: auto;
+    flex-grow: 0;
+    padding-left: 0.25em;
+    padding-right: 0.25em;
+}
+
+#seed_row, #subseed_row{
+    gap: 0.5rem;
+}
+
+#subseed_show_box{
+    min-width: auto;
+    flex-grow: 0;
+}
+
+#subseed_show_box > div{
+    border: 0;
+    height: 100%;
+}
+
 #subseed_show{
-    min-width: 6em;
-    max-width: 6em;
+    min-width: auto;
+    flex-grow: 0;
+    padding: 0;
 }
 
 #subseed_show label{
@@ -214,7 +236,7 @@ input[type="range"]{
 #lightboxModal{
   display: none;
   position: fixed;
-  z-index: 900;
+  z-index: 1001;
   padding-top: 100px;
   left: 0;
   top: 0;
@@ -224,17 +246,26 @@ input[type="range"]{
   background-color: rgba(20, 20, 20, 0.95);
 }
 
-.modalClose {
+.modalClose, 
+.modalZoom {
   color: white;
   position: absolute;
   top: 10px;
   right: 25px;
   font-size: 35px;
   font-weight: bold;
+  cursor: pointer;
+}
+
+.modalZoom {
+  left: 10px;
+  right: auto;
 }
 
 .modalClose:hover,
-.modalClose:focus {
+.modalClose:focus,
+.modalZoom:hover,
+.modalZoom:focus {
   color: #999;
   text-decoration: none;
   cursor: pointer;
@@ -246,6 +277,11 @@ input[type="range"]{
     margin-right: auto;
     margin-top: auto;
     width: auto;
+}
+
+.modalImageFullscreen {
+    max-width: max-content;
+    height: 90%;
 }
 
 .modalPrev,
