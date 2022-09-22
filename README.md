@@ -20,6 +20,8 @@ A browser interface based on Gradio library for Stable Diffusion.
     - CodeFormer, face restoration tool as an alternative to GFPGAN
     - RealESRGAN, neural network upscaler
     - ESRGAN, neural network with a lot of third party models
+    - SwinIR, neural network upscaler
+    - LDSR, Latent diffusion super resolution upscaling
 - Resizing aspect ratio options
 - Sampling method selection
 - Interrupt processing at any time
@@ -41,6 +43,10 @@ A browser interface based on Gradio library for Stable Diffusion.
 - Seed resizing
 - CLIP interrogator
 - Prompt Editing
+- Batch Processing
+- Img2img Alternative
+- Highres Fix
+- LDSR Upscaling
 
 ## Installation and Running
 Make sure the required [dependencies](https://github.com/AUTOMATIC1111/stable-diffusion-webui/wiki/Dependencies) are met and follow the instructions available for both [NVidia](https://github.com/AUTOMATIC1111/stable-diffusion-webui/wiki/Install-and-Run-on-NVidia-GPUs) (recommended) and [AMD](https://github.com/AUTOMATIC1111/stable-diffusion-webui/wiki/Install-and-Run-on-AMD-GPUs) GPUs.
@@ -77,7 +83,10 @@ The documentation was moved from this README over to the project's [wiki](https:
 - Stable Diffusion - https://github.com/CompVis/stable-diffusion, https://github.com/CompVis/taming-transformers
 - k-diffusion - https://github.com/crowsonkb/k-diffusion.git
 - GFPGAN - https://github.com/TencentARC/GFPGAN.git
+- CodeFormer - https://github.com/sczhou/CodeFormer
 - ESRGAN - https://github.com/xinntao/ESRGAN
+- SwinIR - https://github.com/JingyunLiang/SwinIR
+- LDSR - https://github.com/Hafiidz/latent-diffusion
 - Ideas for optimizations - https://github.com/basujindal/stable-diffusion
 - Doggettx - Cross Attention layer optimization - https://github.com/Doggettx/stable-diffusion, original idea for prompt editing.
 - Idea for SD upscale - https://github.com/jquesnelle/txt2imghd
