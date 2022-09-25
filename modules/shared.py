@@ -115,7 +115,7 @@ def options_section(section_identifer, options_dict):
     return options_dict
 
 
-hide_dirs = {"visible": False} if cmd_opts.hide_ui_dir_config else None
+hide_dirs = {"visible": not cmd_opts.hide_ui_dir_config}
 
 options_templates = {}
 
@@ -305,6 +305,13 @@ class TotalTQDM:
         if self._tqdm is None:
             self.reset()
         self._tqdm.update()
+
+    def updateTotal(self, new_total):
+        if not opts.multiple_tqdm:
+            return
+        if self._tqdm is None:
+            self.reset()
+        self._tqdm.total=new_total
 
     def clear(self):
         if self._tqdm is not None:
