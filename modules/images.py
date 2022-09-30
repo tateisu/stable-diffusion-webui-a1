@@ -380,17 +380,17 @@ def save_image(image, path, basename, seed=None, prompt=None, extension='png', i
     os.makedirs(path, exist_ok=True)
 
     if forced_filename is None:
+        basecount = 1 # get_next_sequence_number(path, basename)
         fullfn = "a.png"
         fullfn_without_extension = "a"
-        basecount = 1 # get_next_sequence_number(path, basename)
         for i in range(500):
             fnList=[]
             if file_decoration != "":
                 fnList.append(file_decoration)
             if basename != "":
                 fnList.append(basename)
-            if not fnList or basecount != 1:
-                fnList.append(basecount)
+            if not fnList or (basecount+i) != 1:
+                fnList.append(basecount+i)
             fullfn_without_extension = os.path.join(path, "-".join(fnList))
             fullfn = f"{fullfn_without_extension}.{extension}"
             if not os.path.exists(fullfn):

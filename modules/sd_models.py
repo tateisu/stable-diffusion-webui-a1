@@ -64,6 +64,7 @@ def list_models():
 
         return f'{name} [{shorthash}]', shortname
 
+    cmd_ckpt = shared.cmd_opts.ckpt
     if os.path.exists(cmd_ckpt):
         h = model_hash(cmd_ckpt)
         title, short_model_name = modeltitle(cmd_ckpt, h)
