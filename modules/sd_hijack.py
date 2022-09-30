@@ -465,7 +465,6 @@ class FrozenCLIPEmbedderWithCustomWords(torch.nn.Module):
                     overflowing_text = self.wrapped.tokenizer.convert_tokens_to_string(''.join(overflowing_words))
 
                     hijack_comments.append(f"Warning: too many input tokens; some ({len(overflowing_words)}) have been truncated:\n{overflowing_text}\n")
-                    print(f"Warning: too many input tokens; some ({len(overflowing_words)}) have been truncated:\n{overflowing_text}\n")
 
                 token_count = len(remade_tokens)
                 remade_tokens = remade_tokens + [id_end] * (maxlen - 2 - len(remade_tokens))
