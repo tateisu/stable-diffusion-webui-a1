@@ -1,5 +1,6 @@
 import glob
 import os
+import re
 import shutil
 import importlib
 from urllib.parse import urlparse
@@ -30,6 +31,12 @@ def load_models(model_path: str, model_url: str = None, command_path: str = None
     try:
         places = []
 
+        # Normalizes path separators in command line options to match the OS
+        if command_path is not None:
+            command_path = os.path.normpath(command_path)
+        if model_path is not None:
+            model_path = os.path.normpath(model_path)
+
         if command_path is not None and command_path != model_path:
             pretrained_path = os.path.join(command_path, 'experiments/pretrained_models')
             if os.path.exists(pretrained_path):
@@ -43,7 +50,13 @@ def load_models(model_path: str, model_url: str = None, command_path: str = None
         for place in places:
             if os.path.exists(place):
                 for file in glob.iglob(place + '**/**', recursive=True):
-                    full_path = os.path.join(place, file)
+                    if file.startswith(place):
+                        # if file already contains a place, no need to join path
+                        full_path = file
+                    else:
+                        full_path = os.path.join(place, file)
+                    print(f"full_path={full_path}")
+
                     if os.path.isdir(full_path):
                         continue
                     if len(ext_filter) != 0:
@@ -60,7 +73,8 @@ def load_models(model_path: str, model_url: str = None, command_path: str = None
             else:
                 output.append(model_url)
 
-    except Exception:
+    except Exception as ex:
+        print(ex)
         pass
 
     return output
