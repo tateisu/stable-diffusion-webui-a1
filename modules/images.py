@@ -396,7 +396,7 @@ def save_image(image, path, basename, seed=None, prompt=None, extension='png', i
             if basename != "":
                 fnList.append(basename)
             if not fnList or (basecount+i) != 1:
-                fnList.append(basecount+i)
+                fnList.append(str(basecount+i))
             fullfn_without_extension = os.path.join(path, "-".join(fnList))
             fullfn = f"{fullfn_without_extension}.{extension}"
             if not os.path.exists(fullfn):
