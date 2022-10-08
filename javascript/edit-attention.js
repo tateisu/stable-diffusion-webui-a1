@@ -3,6 +3,10 @@ addEventListener('keydown', (event) => {
 	if (!target.hasAttribute("placeholder")) return;
 	if (!target.placeholder.toLowerCase().includes("prompt")) return;
 
+	// disable attention by CTRL-UP, CTRL-DOWN
+	// https://github.com/AUTOMATIC1111/stable-diffusion-webui/commit/2995107fa24cfd72b0a991e18271dcde148c2807
+	return;
+
 	let plus = "ArrowUp"
 	let minus = "ArrowDown"
 	if (event.key != plus && event.key != minus) return;
