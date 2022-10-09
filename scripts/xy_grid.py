@@ -11,7 +11,7 @@ import modules.scripts as scripts
 import gradio as gr
 
 from modules import images
-from modules.processing import process_images, Processed
+from modules.processing import process_images, Processed, get_correct_sampler
 from modules.shared import opts, cmd_opts, state
 import modules.shared as shared
 import modules.sd_samplers
@@ -56,15 +56,17 @@ def apply_order(p, x, xs):
     p.prompt = prompt_tmp + p.prompt
     
 
-samplers_dict = {}
-for i, sampler in enumerate(modules.sd_samplers.samplers):
-    samplers_dict[sampler.name.lower()] = i
-    for alias in sampler.aliases:
-        samplers_dict[alias.lower()] = i
+def build_samplers_dict(p):
+    samplers_dict = {}
+    for i, sampler in enumerate(get_correct_sampler(p)):
+        samplers_dict[sampler.name.lower()] = i
+        for alias in sampler.aliases:
+            samplers_dict[alias.lower()] = i
+    return samplers_dict
 
 
 def apply_sampler(p, x, xs):
-    sampler_index = samplers_dict.get(x.lower(), None)
+    sampler_index = build_samplers_dict(p).get(x.lower(), None)
     if sampler_index is None:
         raise RuntimeError(f"Unknown sampler: {x}")
 
@@ -143,7 +145,7 @@ def draw_xy_grid(p, xs, ys, x_labels, y_labels, cell, draw_legend):
     ver_texts = [[images.GridAnnotation(y)] for y in y_labels]
     hor_texts = [[images.GridAnnotation(x)] for x in x_labels]
 
-    first_pocessed = None
+    first_processed = None
 
     state.job_count = len(xs) * len(ys) * p.n_iter
 
@@ -152,8 +154,8 @@ def draw_xy_grid(p, xs, ys, x_labels, y_labels, cell, draw_legend):
             state.job = f"{ix + iy * len(xs) + 1} out of {len(xs) * len(ys)}"
 
             processed = cell(x, y)
-            if first_pocessed is None:
-                first_pocessed = processed
+            if first_processed is None:
+                first_processed = processed
 
             try:
               res.append(processed.images[0])
@@ -164,9 +166,9 @@ def draw_xy_grid(p, xs, ys, x_labels, y_labels, cell, draw_legend):
     if draw_legend:
         grid = images.draw_grid_annotations(grid, res[0].width, res[0].height, hor_texts, ver_texts)
 
-    first_pocessed.images = [grid]
+    first_processed.images = [grid]
 
-    return first_pocessed
+    return first_processed
 
 
 re_range = re.compile(r"\s*([+-]?\s*\d+)\s*-\s*([+-]?\s*\d+)(?:\s*\(([+-]\d+)\s*\))?\s*")
@@ -196,7 +198,9 @@ class Script(scripts.Script):
         return [x_type, x_values, y_type, y_values, draw_legend, no_fixed_seeds]
 
     def run(self, p, x_type, x_values, y_type, y_values, draw_legend, no_fixed_seeds):
-        modules.processing.fix_seed(p)
+        if not no_fixed_seeds:
+            modules.processing.fix_seed(p)
+
         p.batch_size = 1
 
         initial_hn = opts.sd_hypernetwork
@@ -214,7 +218,6 @@ class Script(scripts.Script):
                     m = re_range.fullmatch(val)
                     mc = re_range_count.fullmatch(val)
                     if m is not None:
-
                         start = int(m.group(1))
                         end = int(m.group(2))+1
                         step = int(m.group(3)) if m.group(3) is not None else 1
@@ -256,6 +259,16 @@ class Script(scripts.Script):
                 valslist = list(permutations(valslist))
 
             valslist = [opt.type(x) for x in valslist]
+            
+            # Confirm options are valid before starting
+            if opt.label == "Sampler":
+                for sampler_val in valslist:
+                    if sampler_val.lower() not in samplers_dict.keys():
+                        raise RuntimeError(f"Unknown sampler: {sampler_val}")
+            elif opt.label == "Checkpoint name":
+                for ckpt_val in valslist:
+                    if modules.sd_models.get_closet_checkpoint_match(ckpt_val) is None:
+                        raise RuntimeError(f"Checkpoint for {ckpt_val} not found")
 
             return valslist
 
