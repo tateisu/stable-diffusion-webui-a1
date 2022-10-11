@@ -10,7 +10,7 @@ import numpy as np
 import modules.scripts as scripts
 import gradio as gr
 
-from modules import images
+from modules import images, hypernetwork
 from modules.processing import process_images, Processed, get_correct_sampler
 from modules.shared import opts, cmd_opts, state
 import modules.shared as shared
@@ -80,8 +80,11 @@ def apply_checkpoint(p, x, xs):
 
 
 def apply_hypernetwork(p, x, xs):
-    hn = shared.hypernetworks.get(x, None)
-    opts.data["sd_hypernetwork"] = hn.name if hn is not None else 'None'
+    hypernetwork.load_hypernetwork(x)
+
+
+def apply_clip_skip(p, x, xs):
+    opts.data["CLIP_stop_at_last_layers"] = x
 
 
 def format_value_add_label(p, opt, x):
@@ -135,6 +138,7 @@ axis_options = [
     AxisOption("Sigma max", float, apply_field("s_tmax"), format_value_add_label),
     AxisOption("Sigma noise", float, apply_field("s_noise"), format_value_add_label),
     AxisOption("Eta", float, apply_field("eta"), format_value_add_label),
+    AxisOption("Clip skip", int, apply_clip_skip, format_value_add_label),
     AxisOptionImg2Img("Denoising", float, apply_field("denoising_strength"), format_value_add_label),  # as it is now all AxisOptionImg2Img items must go after AxisOption ones
 ]
 
@@ -201,9 +205,11 @@ class Script(scripts.Script):
         if not no_fixed_seeds:
             modules.processing.fix_seed(p)
 
-        p.batch_size = 1
+        if not opts.return_grid:
+            p.batch_size = 1
 
-        initial_hn = opts.sd_hypernetwork
+
+        CLIP_stop_at_last_layers = opts.CLIP_stop_at_last_layers
 
         def process_axis(opt, vals):
             if opt.label == 'Nothing':
@@ -262,6 +268,7 @@ class Script(scripts.Script):
             
             # Confirm options are valid before starting
             if opt.label == "Sampler":
+                samplers_dict = build_samplers_dict(p)
                 for sampler_val in valslist:
                     if sampler_val.lower() not in samplers_dict.keys():
                         raise RuntimeError(f"Unknown sampler: {sampler_val}")
@@ -321,6 +328,8 @@ class Script(scripts.Script):
         # restore checkpoint in case it was changed by axes
         modules.sd_models.reload_model_weights(shared.sd_model)
 
-        opts.data["sd_hypernetwork"] = initial_hn
+        hypernetwork.load_hypernetwork(opts.sd_hypernetwork)
+
+        opts.data["CLIP_stop_at_last_layers"] = CLIP_stop_at_last_layers
 
         return processed

@@ -311,7 +311,7 @@ def interrogate(image):
 
 
 def interrogate_deepbooru(image):
-    prompt = get_deepbooru_tags(image)
+    prompt = get_deepbooru_tags(image, opts.interrogate_deepbooru_score_threshold)
     return gr_show(True) if prompt is None else prompt
 
 
@@ -961,7 +961,7 @@ def create_ui(wrap_gradio_gpu_call):
         
         extras_send_to_inpaint.click(
             fn=lambda x: image_from_url_text(x),
-            _js="extract_image_from_gallery_img2img",
+            _js="extract_image_from_gallery_inpaint",
             inputs=[result_images],
             outputs=[init_img_with_mask],
         )
@@ -1029,6 +1029,8 @@ def create_ui(wrap_gradio_gpu_call):
 
                     process_src = gr.Textbox(label='Source directory')
                     process_dst = gr.Textbox(label='Destination directory')
+                    process_width = gr.Slider(minimum=64, maximum=2048, step=64, label="Width", value=512)
+                    process_height = gr.Slider(minimum=64, maximum=2048, step=64, label="Height", value=512)
 
                     with gr.Row():
                         process_flip = gr.Checkbox(label='Create flipped copies')
@@ -1043,13 +1045,16 @@ def create_ui(wrap_gradio_gpu_call):
                             run_preprocess = gr.Button(value="Preprocess", variant='primary')
 
                 with gr.Group():
-                    gr.HTML(value="<p style='margin-bottom: 0.7em'>Train an embedding; must specify a directory with a set of 512x512 images</p>")
+                    gr.HTML(value="<p style='margin-bottom: 0.7em'>Train an embedding; must specify a directory with a set of 1:1 ratio images</p>")
                     train_embedding_name = gr.Dropdown(label='Embedding', choices=sorted(sd_hijack.model_hijack.embedding_db.word_embeddings.keys()))
                     learn_rate = gr.Number(label='Learning rate', value=5.0e-03)
                     dataset_directory = gr.Textbox(label='Dataset directory', placeholder="Path to directory with input images")
                     log_directory = gr.Textbox(label='Log directory', placeholder="Path to directory where to write outputs", value="textual_inversion")
                     template_file = gr.Textbox(label='Prompt template file', value=os.path.join(script_path, "textual_inversion_templates", "style_filewords.txt"))
+                    training_width = gr.Slider(minimum=64, maximum=2048, step=64, label="Width", value=512)
+                    training_height = gr.Slider(minimum=64, maximum=2048, step=64, label="Height", value=512)
                     steps = gr.Number(label='Max steps', value=100000, precision=0)
+                    num_repeats = gr.Number(label='Number of repeats for a single input image per epoch', value=100, precision=0)
                     create_image_every = gr.Number(label='Save an image to log directory every N steps, 0 to disable', value=500, precision=0)
                     save_embedding_every = gr.Number(label='Save a copy of embedding to log directory every N steps, 0 to disable', value=500, precision=0)
 
@@ -1092,6 +1097,8 @@ def create_ui(wrap_gradio_gpu_call):
             inputs=[
                 process_src,
                 process_dst,
+                process_width,
+                process_height,
                 process_flip,
                 process_split,
                 process_caption,
@@ -1110,7 +1117,10 @@ def create_ui(wrap_gradio_gpu_call):
                 learn_rate,
                 dataset_directory,
                 log_directory,
+                training_width,
+                training_height,
                 steps,
+                num_repeats,
                 create_image_every,
                 save_embedding_every,
                 template_file,
@@ -1175,10 +1185,13 @@ Requested path was: {f}
         changed = 0
 
         for key, value, comp in zip(opts.data_labels.keys(), args, components):
-            if not opts.same_type(value, opts.data_labels[key].default):
-                return f"Bad value for setting {key}: {value}; expecting {type(opts.data_labels[key].default).__name__}"
+            if comp != dummy_component and not opts.same_type(value, opts.data_labels[key].default):
+                return f"Bad value for setting {key}: {value}; expecting {type(opts.data_labels[key].default).__name__}", opts.dumpjson()
 
         for key, value, comp in zip(opts.data_labels.keys(), args, components):
+            if comp == dummy_component:
+                continue
+
             comp_args = opts.data_labels[key].component_args
             if comp_args and isinstance(comp_args, dict) and comp_args.get('visible') is False:
                 continue
@@ -1196,12 +1209,29 @@ Requested path was: {f}
 
         return f'{changed} settings changed.', opts.dumpjson()
 
+    def run_settings_single(value, key):
+        if not opts.same_type(value, opts.data_labels[key].default):
+            return gr.update(visible=True), opts.dumpjson()
+
+        oldval = opts.data.get(key, None)
+        opts.data[key] = value
+
+        if oldval != value:
+            if opts.data_labels[key].onchange is not None:
+                opts.data_labels[key].onchange()
+
+        opts.save(shared.config_filename)
+
+        return gr.update(value=value), opts.dumpjson()
+
     with gr.Blocks(analytics_enabled=False) as settings_interface:
         settings_submit = gr.Button(value="Apply settings", variant='primary')
         result = gr.HTML()
 
         settings_cols = 3
         items_per_col = int(len(opts.data_labels) * 0.9 / settings_cols)
+
+        quicksettings_list = []
 
         cols_displayed = 0
         items_displayed = 0
@@ -1225,10 +1255,14 @@ Requested path was: {f}
 
                     gr.HTML(elem_id="settings_header_text_{}".format(item.section[0]), value='<h1 class="gr-button-lg">{}</h1>'.format(item.section[1]))
 
-                component = create_setting_component(k)
-                component_dict[k] = component
-                components.append(component)
-                items_displayed += 1
+                if item.show_on_main_page:
+                    quicksettings_list.append((i, k, item))
+                    components.append(dummy_component)
+                else:
+                    component = create_setting_component(k)
+                    component_dict[k] = component
+                    components.append(component)
+                    items_displayed += 1
 
         request_notifications = gr.Button(value='Request browser notifications', elem_id="request_notifications")
         request_notifications.click(
@@ -1241,7 +1275,6 @@ Requested path was: {f}
         with gr.Row():
             reload_script_bodies = gr.Button(value='Reload custom script bodies (No ui updates, No restart)', variant='secondary')
             restart_gradio = gr.Button(value='Restart Gradio and Refresh components (Custom Scripts, ui.py, js and css only)', variant='primary')
-
 
         def reload_scripts():
             modules.scripts.reload_script_body_only()
@@ -1289,12 +1322,16 @@ Requested path was: {f}
         css += css_hide_progressbar
 
     with gr.Blocks(css=css, analytics_enabled=False, title="Stable Diffusion") as demo:
-        
+        with gr.Row(elem_id="quicksettings"):
+            for i, k, item in quicksettings_list:
+                component = create_setting_component(k)
+                component_dict[k] = component
+
         settings_interface.gradio_ref = demo
         
         with gr.Tabs() as tabs:
             for interface, label, ifid in interfaces:
-                with gr.TabItem(label, id=ifid):
+                with gr.TabItem(label, id=ifid, elem_id='tab_' + ifid):
                     interface.render()
         
         if os.path.exists(os.path.join(script_path, "notification.mp3")):
@@ -1306,7 +1343,16 @@ Requested path was: {f}
             inputs=components,
             outputs=[result, text_settings],
         )
-        
+
+        for i, k, item in quicksettings_list:
+            component = component_dict[k]
+
+            component.change(
+                fn=lambda value, k=k: run_settings_single(value, key=k),
+                inputs=[component],
+                outputs=[component, text_settings],
+            )
+
         def modelmerger(*args):
             try:
                 results = modules.extras.run_modelmerger(*args)

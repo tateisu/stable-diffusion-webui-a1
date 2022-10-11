@@ -49,16 +49,30 @@ def list_hypernetworks(path):
 
 
 def load_hypernetwork(filename):
-    print(f"Loading hypernetwork {filename}")
     path = shared.hypernetworks.get(filename, None)
-    if (path is not None):
+    if path is not None:
+        print(f"Loading hypernetwork {filename}")
         try:
             shared.loaded_hypernetwork = Hypernetwork(path)
         except Exception:
             print(f"Error loading hypernetwork {path}", file=sys.stderr)
             print(traceback.format_exc(), file=sys.stderr)
     else:
+        if shared.loaded_hypernetwork is not None:
+            print(f"Unloading hypernetwork")
+
         shared.loaded_hypernetwork = None
+
+
+def apply_hypernetwork(hypernetwork, context):
+    hypernetwork_layers = (hypernetwork.layers if hypernetwork is not None else {}).get(context.shape[2], None)
+
+    if hypernetwork_layers is None:
+        return context, context
+
+    context_k = hypernetwork_layers[0](context)
+    context_v = hypernetwork_layers[1](context)
+    return context_k, context_v
 
 
 def attention_CrossAttention_forward(self, x, context=None, mask=None):
@@ -67,15 +81,9 @@ def attention_CrossAttention_forward(self, x, context=None, mask=None):
     q = self.to_q(x)
     context = default(context, x)
 
-    hypernetwork = shared.loaded_hypernetwork
-    hypernetwork_layers = (hypernetwork.layers if hypernetwork is not None else {}).get(context.shape[2], None)
-
-    if hypernetwork_layers is not None:
-        k = self.to_k(hypernetwork_layers[0](context))
-        v = self.to_v(hypernetwork_layers[1](context))
-    else:
-        k = self.to_k(context)
-        v = self.to_v(context)
+    context_k, context_v = apply_hypernetwork(shared.loaded_hypernetwork, context)
+    k = self.to_k(context_k)
+    v = self.to_v(context_v)
 
     q, k, v = map(lambda t: rearrange(t, 'b n (h d) -> (b h) n d', h=h), (q, k, v))
 
