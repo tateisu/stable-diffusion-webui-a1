@@ -1,6 +1,6 @@
 import json
 import math
-import os
+import os,re
 import sys
 
 import torch
@@ -281,6 +281,20 @@ def fix_seed(p):
     p.subseed = get_fixed_seed(p.subseed)
 
 
+def singleLine(s):
+    return re.sub(
+        # remove last , 
+        r'(, )+\Z',
+        "",
+        re.sub(
+            # fix spaces before/after comma
+            r'\s*,\s*',
+            ', ',
+            re.sub(r'\s+', " ", s)
+        )
+    ).strip() # remove head/tail spaces
+
+
 def create_infotext(p, all_prompts, all_seeds, all_subseeds, comments, iteration=0, position_in_batch=0):
     index = position_in_batch + iteration * p.batch_size
 
@@ -311,9 +325,9 @@ def create_infotext(p, all_prompts, all_seeds, all_subseeds, comments, iteration
 
     generation_params_text = ", ".join([k if k == v else f'{k}: {v}' for k, v in generation_params.items() if v is not None])
 
-    negative_prompt_text = "\nNegative prompt: " + p.negative_prompt if p.negative_prompt else ""
+    negative_prompt_text = "\nNegative prompt: " + singleLine(p.negative_prompt) if p.negative_prompt else ""
 
-    return f"{all_prompts[index]}{negative_prompt_text}\n{generation_params_text}".strip()
+    return f"{singleLine(all_prompts[index])}{negative_prompt_text}\n{generation_params_text}".strip()
 
 
 def process_images(p: StableDiffusionProcessing) -> Processed:
