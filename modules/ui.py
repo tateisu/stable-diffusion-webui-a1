@@ -433,7 +433,6 @@ def create_toprow(is_img2img):
                 with gr.Column(scale=80):
                     with gr.Row():
                         prompt = gr.Textbox(label="Prompt", elem_id=f"{id_part}_prompt", show_label=False, placeholder="Prompt", lines=2)
-
                 with gr.Column(scale=1, elem_id="roll_col"):
                     roll = gr.Button(value=art_symbol, elem_id="roll", visible=len(shared.artist_db.artists) > 0)
                     paste = gr.Button(value=paste_symbol, elem_id="paste")
@@ -515,6 +514,7 @@ def create_ui(wrap_gradio_gpu_call):
     with gr.Blocks(analytics_enabled=False) as txt2img_interface:
         txt2img_prompt, roll, txt2img_prompt_style, txt2img_negative_prompt, txt2img_prompt_style2, submit, _, _, txt2img_prompt_style_apply, txt2img_save_style, paste, token_counter, token_button = create_toprow(is_img2img=False)
         dummy_component = gr.Label(visible=False)
+        txt_prompt_img = gr.File(label="", elem_id="txt2img_prompt_image", file_count="single", type="file", visible=False)
 
         with gr.Row(elem_id='txt2img_progress_row'):
             with gr.Column(scale=1):
@@ -540,10 +540,11 @@ def create_ui(wrap_gradio_gpu_call):
                     enable_hr = gr.Checkbox(label='Highres. fix', value=False)
 
                 with gr.Row(visible=False) as hr_options:
-                    scale_latent = gr.Checkbox(label='Scale latent', value=False)
+                    firstphase_width = gr.Slider(minimum=64, maximum=1024, step=64, label="First pass width", value=512)
+                    firstphase_height = gr.Slider(minimum=64, maximum=1024, step=64, label="First pass height", value=512)
                     denoising_strength = gr.Slider(minimum=0.0, maximum=1.0, step=0.01, label='Denoising strength', value=0.7)
 
-                with gr.Row():
+                with gr.Row(equal_height=True):
                     batch_count = gr.Number(label='Batch count', value=1, precision=0)
                     batch_size = gr.Slider(minimum=1, maximum=8, step=1, label='Batch size', value=1)
 
@@ -602,8 +603,9 @@ def create_ui(wrap_gradio_gpu_call):
                     height,
                     width,
                     enable_hr,
-                    scale_latent,
                     denoising_strength,
+                    firstphase_width,
+                    firstphase_height,
                 ] + custom_inputs,
                 outputs=[
                     txt2img_gallery,
@@ -615,6 +617,18 @@ def create_ui(wrap_gradio_gpu_call):
 
             txt2img_prompt.submit(**txt2img_args)
             submit.click(**txt2img_args)
+
+            txt_prompt_img.change(
+                fn=modules.images.image_data,
+                # _js = "get_extras_tab_index",
+                inputs=[
+                    txt_prompt_img
+                ],
+                outputs=[
+                    txt2img_prompt,
+                    txt_prompt_img
+                ]
+            )
 
             enable_hr.change(
                 fn=lambda x: gr_show(x),
@@ -668,6 +682,8 @@ def create_ui(wrap_gradio_gpu_call):
                 (denoising_strength, "Denoising strength"),
                 (enable_hr, lambda d: "Denoising strength" in d),
                 (hr_options, lambda d: gr.Row.update(visible="Denoising strength" in d)),
+                (firstphase_width, "First pass size-1"),
+                (firstphase_height, "First pass size-2"),
             ]
             modules.generation_parameters_copypaste.connect_paste(paste, txt2img_paste_fields, txt2img_prompt)
             token_button.click(fn=update_token_counter, inputs=[txt2img_prompt, steps], outputs=[token_counter])
@@ -676,6 +692,9 @@ def create_ui(wrap_gradio_gpu_call):
         img2img_prompt, roll, img2img_prompt_style, img2img_negative_prompt, img2img_prompt_style2, submit, img2img_interrogate, img2img_deepbooru, img2img_prompt_style_apply, img2img_save_style, paste, token_counter, token_button = create_toprow(is_img2img=True)
 
         with gr.Row(elem_id='img2img_progress_row'):
+            img2img_prompt_img = gr.File(label="", elem_id="txt_prompt_image", file_count="single", type="file",
+                                         visible=False)
+
             with gr.Column(scale=1):
                 pass
 
@@ -769,6 +788,18 @@ def create_ui(wrap_gradio_gpu_call):
 
             connect_reuse_seed(seed, reuse_seed, generation_info, dummy_component, is_subseed=False)
             connect_reuse_seed(subseed, reuse_subseed, generation_info, dummy_component, is_subseed=True)
+
+            img2img_prompt_img.change(
+                fn=modules.images.image_data,
+                # _js = "get_extras_tab_index",
+                inputs=[
+                    txt_prompt_img
+                ],
+                outputs=[
+                    img2img_prompt,
+                    img2img_prompt_img
+                ]
+            )
 
             mask_mode.change(
                 lambda mode, img: {
@@ -958,6 +989,7 @@ def create_ui(wrap_gradio_gpu_call):
                 button_id = "hidden_element" if shared.cmd_opts.hide_ui_dir_config else ''
                 open_extras_folder = gr.Button('Open output directory', elem_id=button_id)
 
+
         submit.click(
             fn=wrap_gradio_gpu_call(modules.extras.run_extras),
             _js="get_extras_tab_index",
@@ -1024,11 +1056,12 @@ def create_ui(wrap_gradio_gpu_call):
                 gr.HTML(value="<p>A merger of the two checkpoints will be generated in your <b>checkpoint</b> directory.</p>")
 
                 with gr.Row():
-                    primary_model_name = gr.Dropdown(modules.sd_models.checkpoint_tiles(), elem_id="modelmerger_primary_model_name", label="Primary Model Name")
-                    secondary_model_name = gr.Dropdown(modules.sd_models.checkpoint_tiles(), elem_id="modelmerger_secondary_model_name", label="Secondary Model Name")
+                    primary_model_name = gr.Dropdown(modules.sd_models.checkpoint_tiles(), elem_id="modelmerger_primary_model_name", label="Primary model (A)")
+                    secondary_model_name = gr.Dropdown(modules.sd_models.checkpoint_tiles(), elem_id="modelmerger_secondary_model_name", label="Secondary model (B)")
+                    tertiary_model_name = gr.Dropdown(modules.sd_models.checkpoint_tiles(), elem_id="modelmerger_tertiary_model_name", label="Tertiary model (C)")
                 custom_name = gr.Textbox(label="Custom Name (Optional)")
-                interp_amount = gr.Slider(minimum=0.0, maximum=1.0, step=0.05, label='Interpolation Amount', value=0.3)
-                interp_method = gr.Radio(choices=["Weighted Sum", "Sigmoid", "Inverse Sigmoid"], value="Weighted Sum", label="Interpolation Method")
+                interp_amount = gr.Slider(minimum=0.0, maximum=1.0, step=0.05, label='Interpolation amount (1 - M)', value=0.3)
+                interp_method = gr.Radio(choices=["Weighted Sum", "Sigmoid", "Inverse Sigmoid", "Add difference"], value="Weighted Sum", label="Interpolation Method")
                 save_as_half = gr.Checkbox(value=False, label="Save as float16")
                 modelmerger_merge = gr.Button(elem_id="modelmerger_merge", label="Merge", variant='primary')
 
@@ -1244,7 +1277,10 @@ def create_ui(wrap_gradio_gpu_call):
             def refresh():
                 info.refresh()
                 refreshed_args = info.component_args() if callable(info.component_args) else info.component_args
-                res.choices = refreshed_args["choices"]
+
+                for k, v in refreshed_args.items():
+                    setattr(res, k, v)
+
                 return gr.update(**(refreshed_args or {}))
 
             refresh_button.click(
@@ -1431,7 +1467,7 @@ Requested path was: {f}
 
         settings_interface.gradio_ref = demo
 
-        with gr.Tabs() as tabs:
+        with gr.Tabs(elem_id="tabs") as tabs:
             for interface, label, ifid in interfaces:
                 with gr.TabItem(label, id=ifid, elem_id='tab_' + ifid):
                     interface.render()
@@ -1470,6 +1506,7 @@ Requested path was: {f}
             inputs=[
                 primary_model_name,
                 secondary_model_name,
+                tertiary_model_name,
                 interp_method,
                 interp_amount,
                 save_as_half,
@@ -1479,6 +1516,7 @@ Requested path was: {f}
                 submit_result,
                 primary_model_name,
                 secondary_model_name,
+                tertiary_model_name,
                 component_dict['sd_model_checkpoint'],
             ]
         )
