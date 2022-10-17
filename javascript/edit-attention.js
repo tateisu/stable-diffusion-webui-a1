@@ -2,6 +2,8 @@ addEventListener('keydown', (event) => {
 	let target = event.originalTarget || event.composedPath()[0];
 	if (!target.hasAttribute("placeholder")) return;
 	if (!target.placeholder.toLowerCase().includes("prompt")) return;
+	if (! (event.metaKey || event.ctrlKey)) return;
+
 
 	// disable attention by CTRL-UP, CTRL-DOWN
 	// https://github.com/AUTOMATIC1111/stable-diffusion-webui/commit/2995107fa24cfd72b0a991e18271dcde148c2807
